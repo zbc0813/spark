@@ -96,6 +96,8 @@ private[spark] object JsonProtocol {
         executorMetricsUpdateToJson(metricsUpdate)
       case blockUpdated: SparkListenerBlockUpdated =>
         throw new MatchError(blockUpdated)  // TODO(ekl) implement this
+      case shuffleMapTaskSucceed: SparkListenerShuffleMapTaskSucceed =>
+        shuffleMapTaskSucceedToJson(shuffleMapTaskSucceed)
     }
   }
 
@@ -139,6 +141,13 @@ private[spark] object JsonProtocol {
     ("Task End Reason" -> taskEndReason) ~
     ("Task Info" -> taskInfoToJson(taskInfo)) ~
     ("Task Metrics" -> taskMetricsJson)
+  }
+
+  def shuffleMapTaskSucceedToJson(shuffleMapTaskSucceed: SparkListenerShuffleMapTaskSucceed): JValue = {
+    ("Stage ID" -> shuffleMapTaskSucceed.stageId) ~
+    ("Stage Attempt ID" -> shuffleMapTaskSucceed.stageAttemptId) ~
+    ("Partition ID" -> shuffleMapTaskSucceed.partitionId) ~
+    ("Output Sizes" -> JArray(shuffleMapTaskSucceed.outputSizes.map(JInt(_)).toList))
   }
 
   def jobStartToJson(jobStart: SparkListenerJobStart): JValue = {
@@ -539,6 +548,14 @@ private[spark] object JsonProtocol {
     val taskInfo = taskInfoFromJson(json \ "Task Info")
     val taskMetrics = taskMetricsFromJson(json \ "Task Metrics")
     SparkListenerTaskEnd(stageId, stageAttemptId, taskType, taskEndReason, taskInfo, taskMetrics)
+  }
+
+  def shuffleMapTaskSucceedFromJson(json: JValue): SparkListenerShuffleMapTaskSucceed = {
+    val stageId = (json \ "Stage ID").extract[Int]
+    val stageAttemptId = (json \ "Stage Attempt ID").extract[Int]
+    val partitionId = (json \ "Partition ID").extract[Int]
+    val outputSizes = (json \ "Output Sizes").extract[List[JValue]].map(_.extract[Long]).toArray
+    SparkListenerShuffleMapTaskSucceed(stageId, stageAttemptId, partitionId, outputSizes)
   }
 
   def jobStartFromJson(json: JValue): SparkListenerJobStart = {

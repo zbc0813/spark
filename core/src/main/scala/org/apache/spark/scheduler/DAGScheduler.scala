@@ -1168,6 +1168,12 @@ class DAGScheduler(
               logInfo(s"Ignoring possibly bogus $smt completion from executor $execId")
             } else {
               shuffleStage.addOutputLoc(smt.partitionId, status)
+              val outputSizes = new Array[Long](shuffleStage.shuffleDep.partitioner.numPartitions)
+              for (i <- 0 until outputSizes.length) {
+                outputSizes(i) = status.getSizeForBlock(i)
+              }
+              listenerBus.post(SparkListenerShuffleMapTaskSucceed(stageId, stage.latestInfo.attemptId,
+                smt.partitionId, outputSizes))
             }
 
             if (runningStages.contains(shuffleStage) && shuffleStage.pendingPartitions.isEmpty) {

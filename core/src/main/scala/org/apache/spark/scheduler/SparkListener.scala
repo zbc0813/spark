@@ -101,6 +101,14 @@ case class SparkListenerExecutorRemoved(time: Long, executorId: String, reason: 
 @DeveloperApi
 case class SparkListenerBlockUpdated(blockUpdatedInfo: BlockUpdatedInfo) extends SparkListenerEvent
 
+@DeveloperApi
+case class SparkListenerShuffleMapTaskSucceed(
+    stageId: Int,
+    stageAttemptId: Int,
+    partitionId: Int,
+    outputSizes: Array[Long])
+  extends SparkListenerEvent
+
 /**
  * Periodic updates from executors.
  * @param execId executor id
@@ -223,6 +231,11 @@ trait SparkListener {
    * Called when the driver receives a block update info.
    */
   def onBlockUpdated(blockUpdated: SparkListenerBlockUpdated) { }
+
+  /**
+   * Called when a shuffleMapTask succeeds
+   */
+  def onShuffleMapTaskSucceed(shuffleMapTaskSucceed: SparkListenerShuffleMapTaskSucceed) { }
 }
 
 /**

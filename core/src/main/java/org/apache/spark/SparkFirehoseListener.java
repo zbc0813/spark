@@ -118,4 +118,10 @@ public class SparkFirehoseListener implements SparkListener {
         onEvent(blockUpdated);
     }
 
+    @Override
+    public void onShuffleMapTaskSucceed(SparkListenerShuffleMapTaskSucceed shuffleMapTaskSucceed) {
+        onEvent(shuffleMapTaskSucceed);
+    }
+
+
 }

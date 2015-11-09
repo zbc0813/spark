@@ -415,6 +415,18 @@ class JobProgressListener(conf: SparkConf) extends SparkListener with Logging {
     }
   }
 
+  override def onShuffleMapTaskSucceed(shuffleMapTaskSucceed: SparkListenerShuffleMapTaskSucceed): Unit = synchronized {
+    val stageId = shuffleMapTaskSucceed.stageId
+    val stageAttemptId = shuffleMapTaskSucceed.stageAttemptId
+    val partitionId = shuffleMapTaskSucceed.partitionId
+    val outputSizes = shuffleMapTaskSucceed.outputSizes
+    val stageData = stageIdToData.getOrElseUpdate((stageId, stageAttemptId), {
+      logWarning("ShuffleMapTask succeed for unknown stage " + stageId)
+      new StageUIData
+    })
+    stageData.outputLocs.put(partitionId, outputSizes)
+  }
+
   /**
    * Upon receiving new metrics for a task, updates the per-stage and per-executor-per-stage
    * aggregate metrics by calculating deltas between the currently recorded metrics and the new

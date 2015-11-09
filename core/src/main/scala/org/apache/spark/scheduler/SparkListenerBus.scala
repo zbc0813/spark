@@ -60,6 +60,8 @@ private[spark] trait SparkListenerBus extends ListenerBus[SparkListener, SparkLi
         listener.onExecutorRemoved(executorRemoved)
       case blockUpdated: SparkListenerBlockUpdated =>
         listener.onBlockUpdated(blockUpdated)
+      case shuffleMapTaskSucceed: SparkListenerShuffleMapTaskSucceed =>
+        listener.onShuffleMapTaskSucceed(shuffleMapTaskSucceed)
       case logStart: SparkListenerLogStart => // ignore event log metadata
     }
   }

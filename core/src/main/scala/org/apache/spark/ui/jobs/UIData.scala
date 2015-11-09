@@ -19,7 +19,7 @@ package org.apache.spark.ui.jobs
 
 import org.apache.spark.JobExecutionStatus
 import org.apache.spark.executor.TaskMetrics
-import org.apache.spark.scheduler.{AccumulableInfo, TaskInfo}
+import org.apache.spark.scheduler.{MapStatus, AccumulableInfo, TaskInfo}
 import org.apache.spark.util.collection.OpenHashSet
 
 import scala.collection.mutable
@@ -94,6 +94,8 @@ private[spark] object UIData {
     var accumulables = new HashMap[Long, AccumulableInfo]
     var taskData = new HashMap[Long, TaskUIData]
     var executorSummary = new HashMap[String, ExecutorSummary]
+
+    var outputLocs = new HashMap[Int, Array[Long]]
 
     def hasInput: Boolean = inputBytes > 0
     def hasOutput: Boolean = outputBytes > 0
