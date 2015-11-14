@@ -21,7 +21,7 @@ import java.io.{IOException, ObjectOutputStream}
 
 import scala.reflect.ClassTag
 
-import org.apache.spark.{OneToOneDependency, Partition, SparkContext, TaskContext}
+import org.apache.spark._
 import org.apache.spark.util.Utils
 
 /**
@@ -99,6 +99,15 @@ class PartitionerAwareUnionRDD[T: ClassTag](
     rdds.zip(parentPartitions).iterator.flatMap {
       case (rdd, p) => rdd.iterator(p, context)
     }
+  }
+
+  override def computeInputSize(s: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    var res: Long = 0
+    val parentPartitions = s.asInstanceOf[PartitionerAwareUnionRDDPartition].parents
+    rdds.zip(parentPartitions).iterator.foreach {
+      case (rdd, p) => res += rdd.computeInputSize(p, mapOutputTracker)
+    }
+    res
   }
 
   override def clearDependencies() {

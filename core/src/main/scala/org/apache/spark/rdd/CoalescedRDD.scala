@@ -97,6 +97,14 @@ private[spark] class CoalescedRDD[T: ClassTag](
     }
   }
 
+  override def computeInputSize(partition: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    var res: Long = 0
+    partition.asInstanceOf[CoalescedRDDPartition].parents.iterator.foreach { parentPartition =>
+      res += firstParent[T].computeInputSize(parentPartition, mapOutputTracker)
+    }
+    res
+  }
+
   override def getDependencies: Seq[Dependency[_]] = {
     Seq(new NarrowDependency(prev) {
       def getParents(id: Int): Seq[Int] =

@@ -166,6 +166,17 @@ class ShuffledRowRDD(
     reader.read().asInstanceOf[Iterator[Product2[Int, InternalRow]]].map(_._2)
   }
 
+  override def computeInputSize(split: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    val shuffledRowPartition = split.asInstanceOf[ShuffledRowRDDPartition]
+    val stats = mapOutputTracker.getStatistics(dependency)
+    var res: Long = 0
+    for (i <- shuffledRowPartition.startPreShufflePartitionIndex until
+      shuffledRowPartition.endPreShufflePartitionIndex) {
+      res += stats.bytesByPartitionId(i)
+    }
+    res
+  }
+
   override def clearDependencies() {
     super.clearDependencies()
     dependency = null

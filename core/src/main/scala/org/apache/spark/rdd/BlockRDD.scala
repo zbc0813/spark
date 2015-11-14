@@ -52,6 +52,17 @@ class BlockRDD[T: ClassTag](sc: SparkContext, @transient val blockIds: Array[Blo
     }
   }
 
+  override def computeInputSize(split: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    assertValid()
+    val blockManager = SparkEnv.get.blockManager
+    val blockId = split.asInstanceOf[BlockRDDPartition].blockId
+    blockManager.get(blockId) match {
+      case Some(block) => block.bytes
+      case None =>
+        throw new Exception("Could not compute split, block " + blockId + " not found")
+    }
+  }
+
   override def getPreferredLocations(split: Partition): Seq[String] = {
     assertValid()
     _locations(split.asInstanceOf[BlockRDDPartition].blockId)

@@ -102,6 +102,10 @@ private[spark] class ParallelCollectionRDD[T: ClassTag](
     new InterruptibleIterator(context, s.asInstanceOf[ParallelCollectionPartition[T]].iterator)
   }
 
+  override def computeInputSize(s: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    s.asInstanceOf[ParallelCollectionPartition[T]].values.length
+  }
+
   override def getPreferredLocations(s: Partition): Seq[String] = {
     locationPrefs.getOrElse(s.index, Nil)
   }

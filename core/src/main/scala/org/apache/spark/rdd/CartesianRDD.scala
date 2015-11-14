@@ -76,6 +76,11 @@ class CartesianRDD[T: ClassTag, U: ClassTag](
          y <- rdd2.iterator(currSplit.s2, context)) yield (x, y)
   }
 
+  override def computeInputSize(split: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    val currSplit = split.asInstanceOf[CartesianPartition]
+    rdd1.computeInputSize(currSplit.s1, mapOutputTracker) + rdd2.computeInputSize(currSplit.s2, mapOutputTracker)
+  }
+
   override def getDependencies: Seq[Dependency[_]] = List(
     new NarrowDependency(rdd1) {
       def getParents(id: Int): Seq[Int] = List(id / numPartitionsInRdd2)

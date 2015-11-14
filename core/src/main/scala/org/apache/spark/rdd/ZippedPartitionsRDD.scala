@@ -21,7 +21,7 @@ import java.io.{IOException, ObjectOutputStream}
 
 import scala.reflect.ClassTag
 
-import org.apache.spark.{OneToOneDependency, Partition, SparkContext, TaskContext}
+import org.apache.spark._
 import org.apache.spark.util.Utils
 
 private[spark] class ZippedPartitionsPartition(
@@ -88,6 +88,11 @@ private[spark] class ZippedPartitionsRDD2[A: ClassTag, B: ClassTag, V: ClassTag]
     f(rdd1.iterator(partitions(0), context), rdd2.iterator(partitions(1), context))
   }
 
+  override def computeInputSize(s: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    val partitions = s.asInstanceOf[ZippedPartitionsPartition].partitions
+    rdd1.computeInputSize(partitions(0), mapOutputTracker) + rdd2.computeInputSize(partitions(1), mapOutputTracker)
+  }
+
   override def clearDependencies() {
     super.clearDependencies()
     rdd1 = null
@@ -111,6 +116,13 @@ private[spark] class ZippedPartitionsRDD3
     f(rdd1.iterator(partitions(0), context),
       rdd2.iterator(partitions(1), context),
       rdd3.iterator(partitions(2), context))
+  }
+
+  override def computeInputSize(s: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    val partitions = s.asInstanceOf[ZippedPartitionsPartition].partitions
+    rdd1.computeInputSize(partitions(0), mapOutputTracker) +
+      rdd2.computeInputSize(partitions(1), mapOutputTracker) +
+      rdd3.computeInputSize(partitions(2), mapOutputTracker)
   }
 
   override def clearDependencies() {
@@ -139,6 +151,14 @@ private[spark] class ZippedPartitionsRDD4
       rdd2.iterator(partitions(1), context),
       rdd3.iterator(partitions(2), context),
       rdd4.iterator(partitions(3), context))
+  }
+
+  override def computeInputSize(s: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    val partitions = s.asInstanceOf[ZippedPartitionsPartition].partitions
+    rdd1.computeInputSize(partitions(0), mapOutputTracker) +
+      rdd2.computeInputSize(partitions(1), mapOutputTracker) +
+      rdd3.computeInputSize(partitions(2), mapOutputTracker) +
+      rdd4.computeInputSize(partitions(3), mapOutputTracker)
   }
 
   override def clearDependencies() {

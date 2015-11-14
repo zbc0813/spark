@@ -30,7 +30,7 @@ import org.apache.spark.sql.jdbc.JdbcDialects
 import org.apache.spark.sql.sources._
 import org.apache.spark.sql.types._
 import org.apache.spark.unsafe.types.UTF8String
-import org.apache.spark.{Logging, Partition, SparkContext, TaskContext}
+import org.apache.spark._
 
 /**
  * Data corresponding to one partition of a JDBCRDD.
@@ -486,5 +486,9 @@ private[sql] class JDBCRDD(
       gotNext = false
       nextValue
     }
+  }
+
+  override def computeInputSize(split: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    throw new UnsupportedOperationException("JDBC RDD")
   }
 }

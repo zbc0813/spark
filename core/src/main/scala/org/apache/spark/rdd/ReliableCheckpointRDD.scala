@@ -89,6 +89,9 @@ private[spark] class ReliableCheckpointRDD[T: ClassTag](
     ReliableCheckpointRDD.readCheckpointFile(file, broadcastedConf, context)
   }
 
+  override def computeInputSize(split: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    throw new UnsupportedOperationException("ReliableCheckpoint RDD")
+  }
 }
 
 private[spark] object ReliableCheckpointRDD extends Logging {

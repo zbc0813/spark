@@ -21,7 +21,7 @@ import java.util.Random
 
 import scala.reflect.ClassTag
 
-import org.apache.spark.{Partition, TaskContext}
+import org.apache.spark.{MapOutputTracker, Partition, TaskContext}
 import org.apache.spark.util.random.RandomSampler
 import org.apache.spark.util.Utils
 
@@ -66,5 +66,11 @@ private[spark] class PartitionwiseSampledRDD[T: ClassTag, U: ClassTag](
     val thisSampler = sampler.clone
     thisSampler.setSeed(split.seed)
     thisSampler.sample(firstParent[T].iterator(split.prev, context))
+  }
+
+  override def computeInputSize(splitIn: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    val split = splitIn.asInstanceOf[PartitionwiseSampledRDDPartition]
+    // It's not possible to know the size of the sampled data, so just return the total size
+    firstParent[T].computeInputSize(split.prev, mapOutputTracker)
   }
 }

@@ -19,7 +19,7 @@ package org.apache.spark.rdd
 
 import scala.reflect.ClassTag
 
-import org.apache.spark.{Partition, SparkContext, SparkEnv, SparkException, TaskContext}
+import org.apache.spark._
 import org.apache.spark.storage.RDDBlockId
 
 /**
@@ -64,4 +64,11 @@ private[spark] class LocalCheckpointRDD[T: ClassTag](
       s"instead, which is slower than local checkpointing but more fault-tolerant.")
   }
 
+  override def computeInputSize(partition: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    throw new SparkException(
+      s"Checkpoint block ${RDDBlockId(rddId, partition.index)} not found! Either the executor " +
+        s"that originally checkpointed this partition is no longer alive, or the original RDD is " +
+        s"unpersisted. If this problem persists, you may consider using `rdd.checkpoint()` " +
+        s"instead, which is slower than local checkpointing but more fault-tolerant.")
+  }
 }

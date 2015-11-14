@@ -22,7 +22,7 @@ import java.io.{IOException, ObjectOutputStream}
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
-import org.apache.spark.{Dependency, Partition, RangeDependency, SparkContext, TaskContext}
+import org.apache.spark._
 import org.apache.spark.annotation.DeveloperApi
 import org.apache.spark.util.Utils
 
@@ -85,6 +85,11 @@ class UnionRDD[T: ClassTag](
   override def compute(s: Partition, context: TaskContext): Iterator[T] = {
     val part = s.asInstanceOf[UnionPartition[T]]
     parent[T](part.parentRddIndex).iterator(part.parentPartition, context)
+  }
+
+  override def computeInputSize(s: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    val part = s.asInstanceOf[UnionPartition[T]]
+    parent[T](part.parentRddIndex).computeInputSize(part.parentPartition, mapOutputTracker)
   }
 
   override def getPreferredLocations(s: Partition): Seq[String] =

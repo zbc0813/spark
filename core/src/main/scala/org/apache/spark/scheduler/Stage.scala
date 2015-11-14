@@ -63,6 +63,9 @@ private[scheduler] abstract class Stage(
 
   val numPartitions = rdd.partitions.length
 
+  val inputSizes = Array.fill[Long](numPartitions)(0)
+  val taskExecutionTimes = Array.fill[Long](numPartitions)(-1)
+
   /** Set of jobs that this stage belongs to. */
   val jobIds = new HashSet[Int]
 

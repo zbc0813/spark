@@ -23,13 +23,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.ClassTag
 
-import org.apache.spark.Dependency
-import org.apache.spark.OneToOneDependency
-import org.apache.spark.Partition
-import org.apache.spark.Partitioner
-import org.apache.spark.ShuffleDependency
-import org.apache.spark.SparkEnv
-import org.apache.spark.TaskContext
+import org.apache.spark._
 import org.apache.spark.serializer.Serializer
 
 /**
@@ -128,6 +122,23 @@ private[spark] class SubtractedRDD[K: ClassTag, V: ClassTag, W: ClassTag](
     // the second dep is rdd2; remove all of its keys
     integrate(1, t => map.remove(t._1))
     map.asScala.iterator.map(t => t._2.iterator.map((t._1, _))).flatten
+  }
+
+  override def computeInputSize(p: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    val partition = p.asInstanceOf[CoGroupPartition]
+    var res: Long = 0
+    for ((dep, depNum) <- dependencies.zipWithIndex) dep match {
+      case oneToOneDependency: OneToOneDependency[Product2[K, Any]] @unchecked =>
+        val dependencyPartition = partition.narrowDeps(depNum).get.split
+        // Read them from the parent
+        res += oneToOneDependency.rdd.computeInputSize(dependencyPartition, mapOutputTracker)
+
+      case shuffleDependency: ShuffleDependency[_, _, _] =>
+        // Read map outputs of shuffle
+        val stats = mapOutputTracker.getStatistics(shuffleDependency)
+        res += stats.bytesByPartitionId(partition.index)
+    }
+    res
   }
 
   override def clearDependencies() {

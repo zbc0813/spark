@@ -224,6 +224,11 @@ private[spark] class SqlNewHadoopRDD[V: ClassTag](
     iter
   }
 
+  override def computeInputSize(theSplit: SparkPartition, mapOutputTracker: MapOutputTracker): Long = {
+    val split = theSplit.asInstanceOf[SqlNewHadoopPartition]
+    split.serializableHadoopSplit.value.getLength
+  }
+
   override def getPreferredLocations(hsplit: SparkPartition): Seq[String] = {
     val split = hsplit.asInstanceOf[SqlNewHadoopPartition].serializableHadoopSplit.value
     val locs = HadoopRDD.SPLIT_INFO_REFLECTIONS match {
@@ -285,6 +290,10 @@ private[spark] object SqlNewHadoopRDD {
       val partition = split.asInstanceOf[SqlNewHadoopPartition]
       val inputSplit = partition.serializableHadoopSplit.value
       f(inputSplit, firstParent[T].iterator(split, context))
+    }
+
+    override def computeInputSize(split: SparkPartition, mapOutputTracker: MapOutputTracker): Long = {
+      firstParent[T].computeInputSize(split, mapOutputTracker)
     }
   }
 }

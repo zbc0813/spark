@@ -104,6 +104,10 @@ private abstract class BaseRRDD[T: ClassTag, U: ClassTag](
     }
   }
 
+  override def computeInputSize(split: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    firstParent[T].computeInputSize(split, mapOutputTracker)
+  }
+
   /**
    * Start a thread to write RDD data to the R process.
    */

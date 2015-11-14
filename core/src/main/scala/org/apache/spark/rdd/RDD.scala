@@ -109,6 +109,9 @@ abstract class RDD[T: ClassTag](
   @DeveloperApi
   def compute(split: Partition, context: TaskContext): Iterator[T]
 
+  @DeveloperApi
+  def computeInputSize(split: Partition, mapOutputTracker: MapOutputTracker): Long = { 0 }
+
   /**
    * Implemented by subclasses to return the set of partitions in this RDD. This method will only
    * be called once, so it is safe to implement a time-consuming computation in it.

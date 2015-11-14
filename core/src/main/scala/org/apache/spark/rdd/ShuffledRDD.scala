@@ -99,6 +99,12 @@ class ShuffledRDD[K: ClassTag, V: ClassTag, C: ClassTag](
       .asInstanceOf[Iterator[(K, C)]]
   }
 
+  override def computeInputSize(split: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    val dep = dependencies.head.asInstanceOf[ShuffleDependency[K, V, C]]
+    val stats = mapOutputTracker.getStatistics(dep)
+    stats.bytesByPartitionId(split.index)
+  }
+
   override def clearDependencies() {
     super.clearDependencies()
     prev = null

@@ -19,7 +19,7 @@ package org.apache.spark.rdd
 
 import scala.reflect.ClassTag
 
-import org.apache.spark.{Partition, TaskContext}
+import org.apache.spark.{MapOutputTracker, Partition, TaskContext}
 import org.apache.spark.util.Utils
 
 private[spark]
@@ -67,5 +67,10 @@ class ZippedWithIndexRDD[T: ClassTag](prev: RDD[T]) extends RDD[(T, Long)](prev)
     firstParent[T].iterator(split.prev, context).zipWithIndex.map { x =>
       (x._1, split.startIndex + x._2)
     }
+  }
+
+  override def computeInputSize(splitIn: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    val split = splitIn.asInstanceOf[ZippedWithIndexRDDPartition]
+    firstParent[T].computeInputSize(split.prev, mapOutputTracker)
   }
 }

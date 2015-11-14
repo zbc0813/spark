@@ -20,7 +20,7 @@ package org.apache.spark.streaming.kafka
 import scala.collection.mutable.ArrayBuffer
 import scala.reflect.{classTag, ClassTag}
 
-import org.apache.spark.{Logging, Partition, SparkContext, SparkException, TaskContext}
+import org.apache.spark._
 import org.apache.spark.partial.{PartialResult, BoundedDouble}
 import org.apache.spark.rdd.RDD
 import org.apache.spark.util.NextIterator
@@ -134,6 +134,12 @@ class KafkaRDD[
     } else {
       new KafkaRDDIterator(part, context)
     }
+  }
+
+  override def computeInputSize(thePart: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    val part = thePart.asInstanceOf[KafkaRDDPartition]
+    assert(part.fromOffset <= part.untilOffset, errBeginAfterEnd(part))
+    part.untilOffset - part.fromOffset
   }
 
   private class KafkaRDDIterator(

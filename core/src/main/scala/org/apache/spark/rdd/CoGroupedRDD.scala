@@ -160,6 +160,23 @@ class CoGroupedRDD[K: ClassTag](
       map.iterator.asInstanceOf[Iterator[(K, Array[Iterable[_]])]])
   }
 
+  override def computeInputSize(s: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    val split = s.asInstanceOf[CoGroupPartition]
+    var res: Long = 0
+    for ((dep, depNum) <- dependencies.zipWithIndex) dep match {
+      case oneToOneDependency: OneToOneDependency[Product2[K, Any]] @unchecked =>
+        val dependencyPartition = split.narrowDeps(depNum).get.split
+        // Read them from the parent
+        res += oneToOneDependency.rdd.computeInputSize(dependencyPartition, mapOutputTracker)
+
+      case shuffleDependency: ShuffleDependency[_, _, _] =>
+        // Read map outputs of shuffle
+        val stats = mapOutputTracker.getStatistics(shuffleDependency)
+        res += stats.bytesByPartitionId(split.index)
+    }
+    res
+  }
+
   private def createExternalMap(numRdds: Int)
     : ExternalAppendOnlyMap[K, CoGroupValue, CoGroupCombiner] = {
 

@@ -19,7 +19,7 @@ package org.apache.spark.rdd
 
 import scala.reflect.ClassTag
 
-import org.apache.spark.{Partition, TaskContext}
+import org.apache.spark.{MapOutputTracker, Partition, TaskContext}
 
 /**
  * An RDD that applies the provided function to every partition of the parent RDD.
@@ -36,4 +36,8 @@ private[spark] class MapPartitionsRDD[U: ClassTag, T: ClassTag](
 
   override def compute(split: Partition, context: TaskContext): Iterator[U] =
     f(context, split.index, firstParent[T].iterator(split, context))
+
+  override def computeInputSize(split: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    firstParent[T].computeInputSize(split, mapOutputTracker)
+  }
 }

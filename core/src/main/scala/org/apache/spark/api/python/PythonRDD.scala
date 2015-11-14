@@ -69,6 +69,10 @@ private[spark] class PythonRDD(
       bufferSize, reuse_worker)
     runner.compute(firstParent.iterator(split, context), split.index, context)
   }
+
+  override def computeInputSize(split: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    firstParent.computeInputSize(split, mapOutputTracker)
+  }
 }
 
 
@@ -343,6 +347,10 @@ private class PairwiseRDD(prev: RDD[Array[Byte]]) extends RDD[(Long, Array[Byte]
       case Seq(a, b) => (Utils.deserializeLongValue(a), b)
       case x => throw new SparkException("PairwiseRDD: unexpected value: " + x)
     }
+  override def computeInputSize(split: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    prev.computeInputSize(split, mapOutputTracker)
+  }
+
   val asJavaPairRDD : JavaPairRDD[Long, Array[Byte]] = JavaPairRDD.fromRDD(this)
 }
 

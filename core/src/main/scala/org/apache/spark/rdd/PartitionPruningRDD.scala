@@ -19,7 +19,7 @@ package org.apache.spark.rdd
 
 import scala.reflect.ClassTag
 
-import org.apache.spark.{NarrowDependency, Partition, TaskContext}
+import org.apache.spark.{MapOutputTracker, NarrowDependency, Partition, TaskContext}
 import org.apache.spark.annotation.DeveloperApi
 
 private[spark] class PartitionPruningRDDPartition(idx: Int, val parentSplit: Partition)
@@ -62,6 +62,11 @@ class PartitionPruningRDD[T: ClassTag](
   override def compute(split: Partition, context: TaskContext): Iterator[T] = {
     firstParent[T].iterator(
       split.asInstanceOf[PartitionPruningRDDPartition].parentSplit, context)
+  }
+
+  override def computeInputSize(split: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    firstParent[T].computeInputSize(
+      split.asInstanceOf[PartitionPruningRDDPartition].parentSplit, mapOutputTracker)
   }
 
   override protected def getPartitions: Array[Partition] =

@@ -76,6 +76,10 @@ private[spark] class HadoopPartition(rddId: Int, idx: Int, s: InputSplit)
     }
     envVars
   }
+
+  def getSplitSize(): Long = {
+    inputSplit.value.getLength
+  }
 }
 
 /**
@@ -285,6 +289,10 @@ class HadoopRDD[K, V](
     new InterruptibleIterator[(K, V)](context, iter)
   }
 
+  override def computeInputSize(split: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    split.asInstanceOf[HadoopPartition].getSplitSize()
+  }
+
   /** Maps over a partition, providing the InputSplit that was used as the base of the partition. */
   @DeveloperApi
   def mapPartitionsWithInputSplit[U: ClassTag](
@@ -379,6 +387,10 @@ private[spark] object HadoopRDD extends Logging {
       val partition = split.asInstanceOf[HadoopPartition]
       val inputSplit = partition.inputSplit.value
       f(inputSplit, firstParent[T].iterator(split, context))
+    }
+
+    override def computeInputSize(split: Partition, mapOutputTracker: MapOutputTracker): Long = {
+      firstParent[T].computeInputSize(split, mapOutputTracker)
     }
   }
 

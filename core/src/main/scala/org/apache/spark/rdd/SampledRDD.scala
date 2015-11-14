@@ -23,7 +23,7 @@ import scala.reflect.ClassTag
 
 import org.apache.commons.math3.distribution.PoissonDistribution
 
-import org.apache.spark.{Partition, TaskContext}
+import org.apache.spark.{MapOutputTracker, Partition, TaskContext}
 
 @deprecated("Replaced by PartitionwiseSampledRDDPartition", "1.0.0")
 private[spark]
@@ -67,5 +67,10 @@ private[spark] class SampledRDD[T: ClassTag](
       val rand = new Random(split.seed)
       firstParent[T].iterator(split.prev, context).filter(x => (rand.nextDouble <= frac))
     }
+  }
+
+  override def computeInputSize(splitIn: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    val split = splitIn.asInstanceOf[SampledRDDPartition]
+    firstParent[T].computeInputSize(split.prev, mapOutputTracker)
   }
 }

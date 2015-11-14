@@ -59,7 +59,7 @@ private[spark] class NewHadoopPartition(
  * @param inputFormatClass Storage format of the data to be read.
  * @param keyClass Class of the key associated with the inputFormatClass.
  * @param valueClass Class of the value associated with the inputFormatClass.
- * @param conf The Hadoop configuration.
+ * @param _conf The Hadoop configuration.
  */
 @DeveloperApi
 class NewHadoopRDD[K, V](
@@ -218,6 +218,10 @@ class NewHadoopRDD[K, V](
     new InterruptibleIterator(context, iter)
   }
 
+  override def computeInputSize(split: Partition, mapOutputTracker: MapOutputTracker): Long = {
+    split.asInstanceOf[NewHadoopPartition].serializableHadoopSplit.value.getLength
+  }
+
   /** Maps over a partition, providing the InputSplit that was used as the base of the partition. */
   @DeveloperApi
   def mapPartitionsWithInputSplit[U: ClassTag](
@@ -279,6 +283,10 @@ private[spark] object NewHadoopRDD {
       val partition = split.asInstanceOf[NewHadoopPartition]
       val inputSplit = partition.serializableHadoopSplit.value
       f(inputSplit, firstParent[T].iterator(split, context))
+    }
+
+    override def computeInputSize(split: Partition, mapOutputTracker: MapOutputTracker): Long = {
+      firstParent[T].computeInputSize(split, mapOutputTracker)
     }
   }
 }
