@@ -931,35 +931,9 @@ class DAGScheduler(
     }
   }
 
-  private def predictRemainingTime(stage: Stage): Double = {
-    def linearRegression(data: Array[(Long, Long)]): (Double, Double) = {
-      val n = data.length
-      var sumx: Double = 0
-      var sumy: Double = 0
-      var sumx2: Double = 0
-      var sumxy: Double = 0
-      for (i <- 0 until n) {
-        sumx += data(i)._1
-        sumy += data(i)._2
-        sumx2 += data(i)._1 * data(i)._1
-        sumxy += data(i)._1 * data(i)._2
-      }
-      val xmean = sumx / n
-      val ymean = sumy / n
-      val a = (n * sumxy - sumx * sumy) / (n * sumx2 - sumx * sumx)
-      val b = ymean - a * xmean
-      (a, b)
-    }
-
-    val data = (stage.inputSizes zip stage.taskExecutionTimes).filter(_._2 != -1)
-    val (a: Double, b: Double) = linearRegression(data)
-    var totalTime: Double = 0
-    for ((inputSize, executionTime) <- (stage.inputSizes zip stage.taskExecutionTimes)) {
-      if (executionTime == -1) {
-        totalTime += a * inputSize + b
-      }
-    }
-    totalTime / 4
+  private def predictRemainingTime(stage: Stage, partitionId: Int): Double = {
+    stage.LinearRegression.add(stage.inputSizes(partitionId), stage.taskExecutionTimes(partitionId))
+    stage.LinearRegression.predict()
   }
 
   /** Called when stage's parents are available and we can now do its task. */
@@ -1160,12 +1134,10 @@ class DAGScheduler(
     val stage = stageIdToStage(task.stageId)
     event.reason match {
       case Success =>
+        stage.taskExecutionTimes(task.partitionId) = event.taskMetrics.executorRunTime
+        stage.latestInfo.remainingTime = Some(predictRemainingTime(stage, task.partitionId))
         listenerBus.post(SparkListenerTaskEnd(stageId, stage.latestInfo.attemptId, taskType,
           event.reason, event.taskInfo, event.taskMetrics))
-        stage.taskExecutionTimes(task.partitionId) = event.taskMetrics.executorRunTime
-        if (stage.numPartitions - stage.pendingPartitions.size > 1) {
-          println("Estimated Stage Remaining Time: " + predictRemainingTime(stage).toInt + "ms")
-        }
         stage.pendingPartitions -= task.partitionId
         task match {
           case rt: ResultTask[_, _] =>

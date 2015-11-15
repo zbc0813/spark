@@ -66,6 +66,38 @@ private[scheduler] abstract class Stage(
   val inputSizes = Array.fill[Long](numPartitions)(0)
   val taskExecutionTimes = Array.fill[Long](numPartitions)(-1)
 
+  object LinearRegression {
+    var n: Int = 0
+    var sumx: Double = 0
+    var sumy: Double = 0
+    var sumx2: Double = 0
+    var sumxy: Double = 0
+    var a: Double = 0
+    var b: Double = 0
+
+    def add(x: Long, y: Long): Unit = {
+      n += 1
+      sumx += x
+      sumy += y
+      sumx2 += x * x
+      sumxy += x * y
+      val xmean = sumx / n
+      val ymean = sumy / n
+      a = (n * sumxy - sumx * sumy) / (n * sumx2 - sumx * sumx)
+      b = ymean - a * xmean
+    }
+
+    def predict(): Double = {
+      var totalTime: Double = 0
+      for ((inputSize, executionTime) <- (inputSizes zip taskExecutionTimes)) {
+        if (executionTime == -1) {
+          totalTime += a * inputSize + b
+        }
+      }
+      totalTime / 4
+    }
+  }
+
   /** Set of jobs that this stage belongs to. */
   val jobIds = new HashSet[Int]
 

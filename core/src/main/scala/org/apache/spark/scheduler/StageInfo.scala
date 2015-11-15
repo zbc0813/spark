@@ -40,6 +40,9 @@ class StageInfo(
   var submissionTime: Option[Long] = None
   /** Time when all tasks in the stage completed or when the stage was cancelled. */
   var completionTime: Option[Long] = None
+
+  var remainingTime: Option[Double] = None
+
   /** If the stage failed, the reason why. */
   var failureReason: Option[String] = None
   /** Terminal values of accumulables updated during this stage. */
