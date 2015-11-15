@@ -783,6 +783,11 @@ class DAGScheduler(
     // In that case, we wouldn't have the stage anymore in stageIdToStage.
     val stageAttemptId = stageIdToStage.get(task.stageId).map(_.latestInfo.attemptId).getOrElse(-1)
     listenerBus.post(SparkListenerTaskStart(task.stageId, stageAttemptId, taskInfo))
+    stageIdToStage.get(task.stageId) match {
+      case Some(stage) =>
+        stage.LinearRegression.taskStart(task.partitionId, clock.getTimeMillis())
+      case None =>
+    }
     submitWaitingStages()
   }
 
@@ -932,8 +937,9 @@ class DAGScheduler(
   }
 
   private def predictRemainingTime(stage: Stage, partitionId: Int): Double = {
-    stage.LinearRegression.add(stage.inputSizes(partitionId), stage.taskExecutionTimes(partitionId))
-    stage.LinearRegression.predict()
+    val curTime = clock.getTimeMillis()
+    stage.LinearRegression.taskEnd(partitionId, curTime)
+    stage.LinearRegression.predict(curTime)
   }
 
   /** Called when stage's parents are available and we can now do its task. */
@@ -1135,7 +1141,7 @@ class DAGScheduler(
     event.reason match {
       case Success =>
         stage.taskExecutionTimes(task.partitionId) = event.taskMetrics.executorRunTime
-        stage.latestInfo.remainingTime = Some(predictRemainingTime(stage, task.partitionId))
+        stage.latestInfo.predictedRemainingTime = Some(predictRemainingTime(stage, task.partitionId))
         listenerBus.post(SparkListenerTaskEnd(stageId, stage.latestInfo.attemptId, taskType,
           event.reason, event.taskInfo, event.taskMetrics))
         stage.pendingPartitions -= task.partitionId

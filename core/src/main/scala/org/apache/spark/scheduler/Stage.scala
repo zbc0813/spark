@@ -17,6 +17,7 @@
 
 package org.apache.spark.scheduler
 
+import scala.collection.mutable.HashMap
 import scala.collection.mutable.HashSet
 
 import org.apache.spark._
@@ -65,6 +66,10 @@ private[scheduler] abstract class Stage(
 
   val inputSizes = Array.fill[Long](numPartitions)(0)
   val taskExecutionTimes = Array.fill[Long](numPartitions)(-1)
+  val taskStartTimes = Array.fill[Long](numPartitions)(-1)
+  val taskEndTimes = Array.fill[Long](numPartitions)(-1)
+
+  val pipelineWidth = 4
 
   object LinearRegression {
     var n: Int = 0
@@ -75,7 +80,9 @@ private[scheduler] abstract class Stage(
     var a: Double = 0
     var b: Double = 0
 
-    def add(x: Long, y: Long): Unit = {
+    def taskEnd(partitionId: Int, endTime: Long): Unit = {
+      val x = inputSizes(partitionId)
+      val y = taskExecutionTimes(partitionId)
       n += 1
       sumx += x
       sumy += y
@@ -85,16 +92,25 @@ private[scheduler] abstract class Stage(
       val ymean = sumy / n
       a = (n * sumxy - sumx * sumy) / (n * sumx2 - sumx * sumx)
       b = ymean - a * xmean
+      taskEndTimes(partitionId) = endTime
     }
 
-    def predict(): Double = {
+    def taskStart(partitionId: Int, startTime: Long): Unit = {
+      taskStartTimes(partitionId) = startTime
+    }
+
+    def predict(curTime: Long): Double = {
       var totalTime: Double = 0
       for ((inputSize, executionTime) <- (inputSizes zip taskExecutionTimes)) {
         if (executionTime == -1) {
           totalTime += a * inputSize + b
         }
       }
-      totalTime / 4
+      for (i <- 0 until numPartitions) {
+        if (taskStartTimes(i) != -1 && taskEndTimes(i) == -1)
+          totalTime -= curTime - taskStartTimes(i)
+      }
+      totalTime / pipelineWidth
     }
   }
 

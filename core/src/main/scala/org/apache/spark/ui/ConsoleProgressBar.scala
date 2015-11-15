@@ -80,7 +80,9 @@ private[spark] class ConsoleProgressBar(sc: SparkContext) extends Logging {
     val bar = stages.map { s =>
       val total = s.numTasks()
       val header = s"[Stage ${s.stageId()}:"
-      val remainingTime = s"Remaining Time: ${(s.remainingTime() / 1000).toInt}s "
+      val tmp = if (s.predictedRemainingTime() == -1) { s"Unknown " }
+        else { s"${(s.predictedRemainingTime() / 1000).toInt}s "}
+      val remainingTime = s"Remaining Time: " + tmp
       val tailer = s"(${s.numCompletedTasks()} + ${s.numActiveTasks()}) / $total]"
       val w = width - header.length - remainingTime.length - tailer.length
       val bar = if (w > 0) {
