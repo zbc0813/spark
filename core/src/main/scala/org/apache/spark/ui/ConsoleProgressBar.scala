@@ -20,6 +20,7 @@ package org.apache.spark.ui
 import java.util.{Timer, TimerTask}
 
 import org.apache.spark._
+import org.apache.spark.util.SystemClock
 
 /**
  * ConsoleProgressBar shows the progress of stages in the next line of the console. It poll the
@@ -80,8 +81,12 @@ private[spark] class ConsoleProgressBar(sc: SparkContext) extends Logging {
     val bar = stages.map { s =>
       val total = s.numTasks()
       val header = s"[Stage ${s.stageId()}:"
-      val tmp = if (s.predictedRemainingTime() == -1) { s"Unknown " }
-        else { s"${(s.predictedRemainingTime() / 1000).toInt}s "}
+      val tmp = if (s.predictedCompletionTime() == -1) { s"Unknown " }
+        else {
+          var t =((s.predictedCompletionTime() - new SystemClock().getTimeMillis()) / 1000).toInt
+          t = math.max(t, 0)
+          s"${t}s "
+        }
       val remainingTime = s"Remaining Time: " + tmp
       val tailer = s"(${s.numCompletedTasks()} + ${s.numActiveTasks()}) / $total]"
       val w = width - header.length - remainingTime.length - tailer.length

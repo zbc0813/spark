@@ -41,7 +41,7 @@ class StageInfo(
   /** Time when all tasks in the stage completed or when the stage was cancelled. */
   var completionTime: Option[Long] = None
 
-  var predictedRemainingTime: Option[Double] = None
+  var predictedCompletionTime: Option[Double] = None
 
   /** If the stage failed, the reason why. */
   var failureReason: Option[String] = None

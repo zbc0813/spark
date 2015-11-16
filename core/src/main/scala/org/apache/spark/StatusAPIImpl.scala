@@ -27,7 +27,7 @@ private class SparkStageInfoImpl(
   val stageId: Int,
   val currentAttemptId: Int,
   val submissionTime: Long,
-  val predictedRemainingTime: Double,
+  val predictedCompletionTime: Double,
   val name: String,
   val numTasks: Int,
   val numActiveTasks: Int,

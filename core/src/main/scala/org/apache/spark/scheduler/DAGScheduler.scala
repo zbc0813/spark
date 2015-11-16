@@ -936,7 +936,7 @@ class DAGScheduler(
     }
   }
 
-  private def predictRemainingTime(stage: Stage, partitionId: Int): Double = {
+  private def predictCompletionTime(stage: Stage, partitionId: Int): Double = {
     val curTime = clock.getTimeMillis()
     stage.LinearRegression.taskEnd(partitionId, curTime)
     stage.LinearRegression.predict(curTime)
@@ -1141,7 +1141,7 @@ class DAGScheduler(
     event.reason match {
       case Success =>
         stage.taskExecutionTimes(task.partitionId) = event.taskMetrics.executorRunTime
-        stage.latestInfo.predictedRemainingTime = Some(predictRemainingTime(stage, task.partitionId))
+        stage.latestInfo.predictedCompletionTime = Some(predictCompletionTime(stage, task.partitionId))
         listenerBus.post(SparkListenerTaskEnd(stageId, stage.latestInfo.attemptId, taskType,
           event.reason, event.taskInfo, event.taskMetrics))
         stage.pendingPartitions -= task.partitionId
@@ -1411,7 +1411,8 @@ class DAGScheduler(
     runningStages -= stage
 
     for(i <- 0 until stage.numPartitions) {
-      println("task " + i + ": " + stage.inputSizes(i) + " bytes " + stage.taskExecutionTimes(i) + " ms")
+      println("task " + i + ": " + stage.inputSizes(i) + " bytes " + stage.taskExecutionTimes(i) + " ms core: " +
+        stage.partitionIdToCore(i))
     }
   }
 

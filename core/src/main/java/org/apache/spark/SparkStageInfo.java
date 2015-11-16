@@ -29,7 +29,7 @@ public interface SparkStageInfo extends Serializable {
   int stageId();
   int currentAttemptId();
   long submissionTime();
-  double predictedRemainingTime();
+  double predictedCompletionTime();
   String name();
   int numTasks();
   int numActiveTasks();

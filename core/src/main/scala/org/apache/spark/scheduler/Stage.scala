@@ -17,6 +17,7 @@
 
 package org.apache.spark.scheduler
 
+import scala.collection.mutable.Queue
 import scala.collection.mutable.HashMap
 import scala.collection.mutable.HashSet
 
@@ -70,6 +71,10 @@ private[scheduler] abstract class Stage(
   val taskEndTimes = Array.fill[Long](numPartitions)(-1)
 
   val pipelineWidth = 4
+  var startedPartitions = 4
+  val partitionIdToCore = new HashMap[Int, Int]
+  val lastFinishTime = Array.fill[Double](pipelineWidth)(0)
+  val coreIdToPartition = Array.fill[Int](pipelineWidth)(-1)
 
   object LinearRegression {
     var n: Int = 0
@@ -92,15 +97,33 @@ private[scheduler] abstract class Stage(
       val ymean = sumy / n
       a = (n * sumxy - sumx * sumy) / (n * sumx2 - sumx * sumx)
       b = ymean - a * xmean
+
       taskEndTimes(partitionId) = endTime
+      if (startedPartitions < numPartitions) {
+        partitionIdToCore.put(startedPartitions, partitionIdToCore.get(partitionId) match {
+          case Some(x) => x
+          case None =>
+            partitionIdToCore.put(partitionId, partitionId)
+            partitionId
+        })
+        val coreId = partitionIdToCore(startedPartitions)
+        lastFinishTime(coreId) = endTime
+        coreIdToPartition(coreId) = startedPartitions
+        startedPartitions += 1
+      }
     }
 
     def taskStart(partitionId: Int, startTime: Long): Unit = {
       taskStartTimes(partitionId) = startTime
+      if (partitionId < pipelineWidth) {
+        lastFinishTime(partitionId) = startTime
+        coreIdToPartition(partitionId) = partitionId
+        partitionIdToCore.put(partitionId, partitionId)
+      }
     }
 
     def predict(curTime: Long): Double = {
-      var totalTime: Double = 0
+      /*var totalTime: Double = 0
       for ((inputSize, executionTime) <- (inputSizes zip taskExecutionTimes)) {
         if (executionTime == -1) {
           totalTime += a * inputSize + b
@@ -110,7 +133,22 @@ private[scheduler] abstract class Stage(
         if (taskStartTimes(i) != -1 && taskEndTimes(i) == -1)
           totalTime -= curTime - taskStartTimes(i)
       }
-      totalTime / pipelineWidth
+      (totalTime + curTime) / pipelineWidth*/
+      val finishTime = lastFinishTime.clone()
+      var nextPartition = 0
+      for (i <- 0 until pipelineWidth) {
+        finishTime(i) += a * inputSizes(coreIdToPartition(i)) + b
+        nextPartition = math.max(nextPartition, coreIdToPartition(i))
+      }
+      nextPartition += 1
+      for (i <- nextPartition until numPartitions) {
+        var choose = 0
+        for (j <- 1 until pipelineWidth) {
+          if (finishTime(j) < finishTime(choose)) choose = j
+        }
+        finishTime(choose) += a * inputSizes(i) + b
+      }
+      finishTime.reduce(math.max(_, _))
     }
   }
 
