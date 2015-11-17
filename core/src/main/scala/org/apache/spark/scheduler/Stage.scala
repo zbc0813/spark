@@ -17,7 +17,6 @@
 
 package org.apache.spark.scheduler
 
-import scala.collection.mutable.Queue
 import scala.collection.mutable.HashMap
 import scala.collection.mutable.HashSet
 

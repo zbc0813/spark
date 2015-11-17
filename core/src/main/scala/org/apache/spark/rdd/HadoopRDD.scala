@@ -21,6 +21,8 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.io.EOFException
 
+import org.apache.spark.util.random.BernoulliSampler
+
 import scala.collection.immutable.Map
 import scala.reflect.ClassTag
 import scala.collection.mutable.ListBuffer
@@ -286,11 +288,18 @@ class HadoopRDD[K, V](
         }
       }
     }
-    new InterruptibleIterator[(K, V)](context, iter)
+    //new InterruptibleIterator[(K, V)](context, iter)
+    if (sampleRate < 1) {
+      val sampler = new BernoulliSampler[(K, V)](sampleRate)
+      sampler.setSeed(Utils.random.nextLong)
+      new InterruptibleIterator[(K, V)](context, sampler.sample(iter))
+    } else {
+      new InterruptibleIterator[(K, V)](context, iter)
+    }
   }
 
   override def computeInputSize(split: Partition, mapOutputTracker: MapOutputTracker): Long = {
-    split.asInstanceOf[HadoopPartition].getSplitSize()
+    (split.asInstanceOf[HadoopPartition].getSplitSize() * sampleRate).toLong
   }
 
   /** Maps over a partition, providing the InputSplit that was used as the base of the partition. */
