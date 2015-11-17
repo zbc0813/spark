@@ -1616,8 +1616,10 @@ class DAGScheduler(
 
   // target r-square value
   private val r2target = 0.9
+
   // prediction at 100% data sampling ratio (actual run)
-  private val predictionX = 100.0
+  private val predictionX = 1.0
+
   // predict stage runtime given sampled runtime
   private def predictTimeByStage (m: HashMap[Int, List[(Double, Long)]]): HashMap[Int, Double] = {
     val result = new HashMap[Int, Double]()
