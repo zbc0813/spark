@@ -43,6 +43,8 @@ class StageInfo(
 
   var predictedCompletionTime: Option[Double] = None
 
+  var unstartedStageTime: Option[Double] = None
+
   /** If the stage failed, the reason why. */
   var failureReason: Option[String] = None
   /** Terminal values of accumulables updated during this stage. */

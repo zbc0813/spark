@@ -257,6 +257,8 @@ private[spark] object JsonProtocol {
     val parentIds = JArray(stageInfo.parentIds.map(JInt(_)).toList)
     val submissionTime = stageInfo.submissionTime.map(JInt(_)).getOrElse(JNothing)
     val completionTime = stageInfo.completionTime.map(JInt(_)).getOrElse(JNothing)
+    val predictedCompletionTime = stageInfo.predictedCompletionTime.map(JDouble(_)).getOrElse(JNothing)
+    val unstartedStageTime = stageInfo.unstartedStageTime.map(JDouble(_)).getOrElse(JNothing)
     val failureReason = stageInfo.failureReason.map(JString(_)).getOrElse(JNothing)
     ("Stage ID" -> stageInfo.stageId) ~
     ("Stage Attempt ID" -> stageInfo.attemptId) ~
@@ -267,6 +269,8 @@ private[spark] object JsonProtocol {
     ("Details" -> stageInfo.details) ~
     ("Submission Time" -> submissionTime) ~
     ("Completion Time" -> completionTime) ~
+    ("Predicted Completion Time" -> predictedCompletionTime) ~
+    ("Unstarted Stage Time" -> unstartedStageTime) ~
     ("Failure Reason" -> failureReason) ~
     ("Accumulables" -> JArray(
         stageInfo.accumulables.values.map(accumulableInfoToJson).toList))
@@ -667,6 +671,8 @@ private[spark] object JsonProtocol {
     val details = (json \ "Details").extractOpt[String].getOrElse("")
     val submissionTime = Utils.jsonOption(json \ "Submission Time").map(_.extract[Long])
     val completionTime = Utils.jsonOption(json \ "Completion Time").map(_.extract[Long])
+    val predictedCompletionTime = Utils.jsonOption(json \ "Predicted Completion Time").map(_.extract[Double])
+    val unstartedStageTime = Utils.jsonOption(json \ "Unstarted Stage Time").map(_.extract[Double])
     val failureReason = Utils.jsonOption(json \ "Failure Reason").map(_.extract[String])
     val accumulatedValues = (json \ "Accumulables").extractOpt[List[JValue]] match {
       case Some(values) => values.map(accumulableInfoFromJson(_))
@@ -677,6 +683,8 @@ private[spark] object JsonProtocol {
       stageId, attemptId, stageName, numTasks, rddInfos, parentIds, details)
     stageInfo.submissionTime = submissionTime
     stageInfo.completionTime = completionTime
+    stageInfo.predictedCompletionTime = predictedCompletionTime
+    stageInfo.unstartedStageTime = unstartedStageTime
     stageInfo.failureReason = failureReason
     for (accInfo <- accumulatedValues) {
       stageInfo.accumulables(accInfo.id) = accInfo

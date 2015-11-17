@@ -142,7 +142,10 @@ class DAGScheduler(
   private[scheduler] val stageIdToStage = new HashMap[Int, Stage]
   private[scheduler] val shuffleToMapStage = new HashMap[Int, ShuffleMapStage]
   private[scheduler] val shuffleToStats = new HashMap[Int, List[(Double, Long)]]
+  private[scheduler] val finalRddToStats = new HashMap[RDD[_], List[(Double, Long)]]
+  private[scheduler] val finalRddToPredictedStageTime = new HashMap[RDD[_], HashMap[Int, Double]]
   private[scheduler] val jobIdToActiveJob = new HashMap[Int, ActiveJob]
+  private[scheduler] val completedShuffleId = new HashSet[Int]
 
   // Stages we need to run whose parents aren't done
   private[scheduler] val waitingStages = new HashSet[Stage]
@@ -505,6 +508,14 @@ class DAGScheduler(
             def removeStage(stageId: Int) {
               // data structures based on Stage
               for (stage <- stageIdToStage.get(stageId)) {
+                val submissionTime: Long = stage.latestInfo.submissionTime.getOrElse(0)
+                val completionTime: Long = stage.latestInfo.completionTime.getOrElse(0)
+                if (finalRddToStats.contains(stage.rdd)) {
+                  val list = finalRddToStats(stage.rdd)
+                  finalRddToStats.put(stage.rdd, (stage.rdd.sampleRate, completionTime - submissionTime) :: list)
+                } else {
+                  finalRddToStats.put(stage.rdd, List((stage.rdd.sampleRate, completionTime - submissionTime)))
+                }
                 if (runningStages.contains(stage)) {
                   logDebug("Removing running stage %d".format(stageId))
                   runningStages -= stage
@@ -515,6 +526,12 @@ class DAGScheduler(
                   if (mapOutputTracker.containsShuffle(shuffleId)) {
                     mapOutputTracker.unregisterShuffle(stage.asInstanceOf[ShuffleMapStage].shuffleDep.shuffleId)
                     blockManagerMaster.removeShuffle(shuffleId, true)
+                  }
+                  if (shuffleToStats.contains(shuffleId)) {
+                    val list = shuffleToStats(shuffleId)
+                    shuffleToStats.put(shuffleId, (stage.rdd.sampleRate, completionTime - submissionTime) :: list)
+                  } else {
+                    shuffleToStats.put(shuffleId, List((stage.rdd.sampleRate, completionTime - submissionTime)))
                   }
                 }
                 if (waitingStages.contains(stage)) {
@@ -609,8 +626,9 @@ class DAGScheduler(
       callSite: CallSite,
       resultHandler: (Int, U) => Unit,
       properties: Properties): Unit = {
-    val sampleRates = Array(0.1, 1)
+    val sampleRates = Array(0.1, 0.2, 0.3, 0.5, 1)
     for (sampleRate <- sampleRates) {
+      if (sampleRate == 1) predictRunningTime(rdd)
       val start = System.nanoTime
       updateSampleRate(rdd, sampleRate)
       val waiter = submitJob(rdd, func, partitions, callSite, resultHandler, properties)
@@ -626,11 +644,10 @@ class DAGScheduler(
           exception.setStackTrace(exception.getStackTrace ++ callerStackTrace)
           throw exception
       }
-      println("Job Finished")
     }
   }
 
-  def updateSampleRate(rdd: RDD[_], sampleRate: Double): Unit = {
+  private def updateSampleRate(rdd: RDD[_], sampleRate: Double): Unit = {
     val visited = new HashSet[RDD[_]]
     // We are manually maintaining a stack here to prevent StackOverflowError
     // caused by recursively visiting
@@ -648,6 +665,38 @@ class DAGScheduler(
     while (waitingForVisit.nonEmpty) {
       visit(waitingForVisit.pop())
     }
+  }
+
+  private def predictRunningTime(finalRdd: RDD[_]): Unit = {
+    // ShuffleMapStage is identified by its shuffleId, ResultStage is indentified by -1
+    val curStageToStats = new HashMap[Int, List[(Double, Long)]]
+    val visited = new HashSet[RDD[_]]
+    // We are manually maintaining a stack here to prevent StackOverflowError
+    // caused by recursively visiting
+    val waitingForVisit = new Stack[RDD[_]]
+    def visit(rdd: RDD[_]) {
+      if (!visited(rdd)) {
+        visited += rdd
+        for (dep <- rdd.dependencies) {
+          dep match {
+            case shuffleDependency: ShuffleDependency[_, _, _] =>
+              if (shuffleToStats.contains(shuffleDependency.shuffleId))
+                curStageToStats.put(shuffleDependency.shuffleId, shuffleToStats(shuffleDependency.shuffleId))
+            case _ =>
+          }
+          waitingForVisit.push(dep.rdd)
+        }
+      }
+    }
+    waitingForVisit.push(finalRdd)
+    while (waitingForVisit.nonEmpty) {
+      visit(waitingForVisit.pop())
+    }
+    curStageToStats.put(-1, finalRddToStats(finalRdd))
+    val predictedStageTime = predictTimeByStage(curStageToStats)
+    finalRddToPredictedStageTime.put(finalRdd, predictedStageTime)
+    println(curStageToStats)
+    println(predictedStageTime)
   }
 
   /**
@@ -949,6 +998,12 @@ class DAGScheduler(
         logDebug("missing: " + missing)
         if (missing.isEmpty) {
           getInputPartitionStats(stage)
+          if (stage.rdd.sampleRate == 1) {
+            if (stage.isInstanceOf[ShuffleMapStage]) {
+              completedShuffleId += stage.asInstanceOf[ShuffleMapStage].shuffleDep.shuffleId
+            }
+            predictUnstartedStageTime(stage)
+          }
           logInfo("Submitting " + stage + " (" + stage.rdd + "), which has no missing parents")
           submitMissingTasks(stage, jobId.get)
         } else {
@@ -973,6 +1028,20 @@ class DAGScheduler(
     val curTime = clock.getTimeMillis()
     stage.LinearRegression.taskEnd(partitionId, curTime)
     stage.LinearRegression.predict(curTime)
+  }
+
+  private def predictUnstartedStageTime(stage: Stage): Unit = {
+    if (stage.isInstanceOf[ResultStage]) {
+      stage.latestInfo.unstartedStageTime = Some(0)
+    } else {
+      val shuffleId = stage.asInstanceOf[ShuffleMapStage].shuffleDep.shuffleId
+      for ((k, v) <- finalRddToPredictedStageTime.find(_._2.contains(shuffleId))) {
+        stage.latestInfo.unstartedStageTime = Some(v.filterKeys(completedShuffleId.contains(_) == false).foldLeft(0.0) {
+          case (a, (k, v)) => a + v
+        })
+      }
+    }
+    //println(stage.latestInfo.unstartedStageTime)
   }
 
   /** Called when stage's parents are available and we can now do its task. */
@@ -1019,7 +1088,9 @@ class DAGScheduler(
         return
     }
 
+    val unstartedStageTime = stage.latestInfo.unstartedStageTime
     stage.makeNewStageAttempt(partitionsToCompute.size, taskIdToLocations.values.toSeq)
+    stage.latestInfo.unstartedStageTime = unstartedStageTime
     listenerBus.post(SparkListenerStageSubmitted(stage.latestInfo, properties))
 
     // TODO: Maybe we can keep the taskBinary in Stage to avoid serializing it multiple times.
