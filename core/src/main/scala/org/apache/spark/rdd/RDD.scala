@@ -112,6 +112,8 @@ abstract class RDD[T: ClassTag](
   @DeveloperApi
   def computeInputSize(split: Partition, mapOutputTracker: MapOutputTracker): Long = { 0 }
 
+  var sampleRate: Double = 1
+
   /**
    * Implemented by subclasses to return the set of partitions in this RDD. This method will only
    * be called once, so it is safe to implement a time-consuming computation in it.

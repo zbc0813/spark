@@ -139,6 +139,7 @@ class DAGScheduler(
   private[scheduler] val jobIdToStageIds = new HashMap[Int, HashSet[Int]]
   private[scheduler] val stageIdToStage = new HashMap[Int, Stage]
   private[scheduler] val shuffleToMapStage = new HashMap[Int, ShuffleMapStage]
+  private[scheduler] val shuffleToStats = new HashMap[Int, List[(Double, Long)]]
   private[scheduler] val jobIdToActiveJob = new HashMap[Int, ActiveJob]
 
   // Stages we need to run whose parents aren't done
@@ -508,6 +509,11 @@ class DAGScheduler(
                 }
                 for ((k, v) <- shuffleToMapStage.find(_._2 == stage)) {
                   shuffleToMapStage.remove(k)
+                  val shuffleId = stage.asInstanceOf[ShuffleMapStage].shuffleDep.shuffleId
+                  if (mapOutputTracker.containsShuffle(shuffleId)) {
+                    mapOutputTracker.unregisterShuffle(stage.asInstanceOf[ShuffleMapStage].shuffleDep.shuffleId)
+                    blockManagerMaster.removeShuffle(shuffleId, true)
+                  }
                 }
                 if (waitingStages.contains(stage)) {
                   logDebug("Removing stage %d from waiting set.".format(stageId))
@@ -601,19 +607,44 @@ class DAGScheduler(
       callSite: CallSite,
       resultHandler: (Int, U) => Unit,
       properties: Properties): Unit = {
-    val start = System.nanoTime
-    val waiter = submitJob(rdd, func, partitions, callSite, resultHandler, properties)
-    waiter.awaitResult() match {
-      case JobSucceeded =>
-        logInfo("Job %d finished: %s, took %f s".format
+    val sampleRates = Array(0.1, 1)
+    for (sampleRate <- sampleRates) {
+      val start = System.nanoTime
+      updateSampleRate(rdd, sampleRate)
+      val waiter = submitJob(rdd, func, partitions, callSite, resultHandler, properties)
+      waiter.awaitResult() match {
+        case JobSucceeded =>
+          logInfo("Job %d finished: %s, took %f s".format
           (waiter.jobId, callSite.shortForm, (System.nanoTime - start) / 1e9))
-      case JobFailed(exception: Exception) =>
-        logInfo("Job %d failed: %s, took %f s".format
+        case JobFailed(exception: Exception) =>
+          logInfo("Job %d failed: %s, took %f s".format
           (waiter.jobId, callSite.shortForm, (System.nanoTime - start) / 1e9))
-        // SPARK-8644: Include user stack trace in exceptions coming from DAGScheduler.
-        val callerStackTrace = Thread.currentThread().getStackTrace.tail
-        exception.setStackTrace(exception.getStackTrace ++ callerStackTrace)
-        throw exception
+          // SPARK-8644: Include user stack trace in exceptions coming from DAGScheduler.
+          val callerStackTrace = Thread.currentThread().getStackTrace.tail
+          exception.setStackTrace(exception.getStackTrace ++ callerStackTrace)
+          throw exception
+      }
+      println("Job Finished")
+    }
+  }
+
+  def updateSampleRate(rdd: RDD[_], sampleRate: Double): Unit = {
+    val visited = new HashSet[RDD[_]]
+    // We are manually maintaining a stack here to prevent StackOverflowError
+    // caused by recursively visiting
+    val waitingForVisit = new Stack[RDD[_]]
+    def visit(rdd: RDD[_]) {
+      rdd.sampleRate = sampleRate
+      if (!visited(rdd)) {
+        visited += rdd
+        for (dep <- rdd.dependencies) {
+          waitingForVisit.push(dep.rdd)
+        }
+      }
+    }
+    waitingForVisit.push(rdd)
+    while (waitingForVisit.nonEmpty) {
+      visit(waitingForVisit.pop())
     }
   }
 
