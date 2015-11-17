@@ -22,6 +22,8 @@ import java.util.Properties
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 
+import org.apache.commons.math3.fitting.{PolynomialCurveFitter, WeightedObservedPoints}
+
 import scala.collection.Map
 import scala.collection.mutable.{HashMap, HashSet, Stack}
 import scala.concurrent.duration._
@@ -1579,6 +1581,63 @@ class DAGScheduler(
     }
 
     Nil
+  }
+
+  // target r-square value
+  private val r2target = 0.9
+  // prediction at 100% data sampling ratio (actual run)
+  private val predictionX = 100.0
+  // predict stage runtime given sampled runtime
+  private def predictTimeByStage (m: HashMap[Int, List[(Double, Long)]]): HashMap[Int, Double] = {
+    val result = new HashMap[Int, Double]()
+    m.foreach {
+      stage =>
+        val points = stage._2
+        val obs = new WeightedObservedPoints()
+        var ysum = 0.0
+
+        for ((percentage, time) <- points) {
+          obs.add(percentage, time.asInstanceOf[Double])
+          ysum += time.asInstanceOf[Double]
+        }
+        val ybar = ysum / points.length
+
+        var degree = 0
+        var r2 = 0.0
+
+        var prediction = -1.0
+
+        // stats formula found here:
+        // https://en.wikipedia.org/wiki/Coefficient_of_determination
+        while (degree <= 2 && r2 < r2target) {
+          val fitter = PolynomialCurveFitter.create(degree)
+          val coeff = fitter.fit(obs.toList).toList
+          var ss_res = 0.0
+          var ss_tot = 0.0
+          for (point <- points) {
+            val y = point._2.asInstanceOf[Double]
+            var yhat = 0.0
+            var xx = 1.0
+            for (deg <- 0 until coeff.length) {
+              yhat += xx * coeff(deg)
+              xx *= point._1
+            }
+            ss_res += (y-yhat) * (y-yhat)
+            ss_tot += (y-ybar) * (y-ybar)
+          }
+          r2 = 1 - (ss_res / ss_tot)
+          prediction = 0.0
+          var xx = 1.0
+          for (deg <- 0 until coeff.length) {
+            prediction += xx * coeff(deg)
+            xx *= predictionX
+          }
+          degree += 1
+        }
+
+        result += ((stage._1, prediction))
+    }
+    result
   }
 
   /** Mark a map stage job as finished with the given output stats, and report to its listener. */
