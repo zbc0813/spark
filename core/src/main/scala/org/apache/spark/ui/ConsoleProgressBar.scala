@@ -79,18 +79,21 @@ private[spark] class ConsoleProgressBar(sc: SparkContext) extends Logging {
   private def show(now: Long, stages: Seq[SparkStageInfo]) {
     val width = TerminalWidth / stages.size
     val bar = stages.map { s =>
+      val curTime = new SystemClock().getTimeMillis()
       val total = s.numTasks()
       val header = s"[Stage ${s.stageId()}:"
       val tmp = if (s.predictedCompletionTime() == -1) { s"Unknown " }
         else {
-          var t =((s.predictedCompletionTime() - new SystemClock().getTimeMillis()) / 1000).toInt
+          var t =((s.predictedCompletionTime() - curTime) / 1000).toInt
           t = math.max(t, 0)
           s"${t}s "
         }
-      val stageRemainingTime = s"Stage Remaining Time: " + tmp
+      var stageRemainingTime = s"Stage Remaining Time: " + tmp
       var unstartedStageTime = ""
-      if (s.unstartedStageTime() >= 0)
-        unstartedStageTime = s"Unstarted Stage Time: ${(s.unstartedStageTime() / 1000).toInt} s"
+      if (s.unstartedStageTime() >= 0) {
+        stageRemainingTime = ""
+        unstartedStageTime = s"Total Remaining Time: ${math.max(0, ((s.predictedCompletionTime() - curTime + s.unstartedStageTime()) / 1000).toInt)} s"
+      }
       val tailer = s"(${s.numCompletedTasks()} + ${s.numActiveTasks()}) / $total]"
       val w = width - header.length - stageRemainingTime.length - unstartedStageTime.length - tailer.length
       val bar = if (w > 0) {

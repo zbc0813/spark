@@ -43,6 +43,7 @@ class StageInfo(
 
   var predictedCompletionTime: Option[Double] = None
 
+  var currentStageTime: Option[Double] = None
   var unstartedStageTime: Option[Double] = None
 
   /** If the stage failed, the reason why. */

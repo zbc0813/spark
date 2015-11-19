@@ -1027,15 +1027,28 @@ class DAGScheduler(
   private def predictCompletionTime(stage: Stage, partitionId: Int): Double = {
     val curTime = clock.getTimeMillis()
     stage.LinearRegression.taskEnd(partitionId, curTime)
-    stage.LinearRegression.predict(curTime)
+    val finishTime = stage.LinearRegression.predict(curTime)
+    if (stage.rdd.sampleRate == 1) {
+      val fraction = 1 - stage.pendingPartitions.size / stage.numPartitions.toDouble
+      val stageTime = stage.latestInfo.currentStageTime.getOrElse(0.0)
+      val bar = 0.25
+      if (fraction <= bar)
+        ((finishTime - stage.taskStartTimes(0)) * fraction + stageTime * (bar - fraction)) / bar + stage.taskStartTimes(0)
+      else
+        finishTime
+    } else {
+      finishTime
+    }
   }
 
   private def predictUnstartedStageTime(stage: Stage): Unit = {
     if (stage.isInstanceOf[ResultStage]) {
+      stage.latestInfo.currentStageTime = Some(finalRddToPredictedStageTime(stage.rdd)(-1))
       stage.latestInfo.unstartedStageTime = Some(0)
     } else {
       val shuffleId = stage.asInstanceOf[ShuffleMapStage].shuffleDep.shuffleId
       for ((k, v) <- finalRddToPredictedStageTime.find(_._2.contains(shuffleId))) {
+        stage.latestInfo.currentStageTime = Some(v(shuffleId))
         stage.latestInfo.unstartedStageTime = Some(v.filterKeys(completedShuffleId.contains(_) == false).foldLeft(0.0) {
           case (a, (k, v)) => a + v
         })
@@ -1088,8 +1101,12 @@ class DAGScheduler(
         return
     }
 
+    val currentStageTime = stage.latestInfo.currentStageTime
     val unstartedStageTime = stage.latestInfo.unstartedStageTime
     stage.makeNewStageAttempt(partitionsToCompute.size, taskIdToLocations.values.toSeq)
+    stage.latestInfo.currentStageTime = currentStageTime
+    if (stage.rdd.sampleRate == 1)
+      stage.latestInfo.predictedCompletionTime = Some(currentStageTime.get + clock.getTimeMillis())
     stage.latestInfo.unstartedStageTime = unstartedStageTime
     listenerBus.post(SparkListenerStageSubmitted(stage.latestInfo, properties))
 
